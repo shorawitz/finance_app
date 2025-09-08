@@ -1,0 +1,45 @@
+services:
+  finance_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: finance_tracker
+      POSTGRES_USER: finance_user
+      POSTGRES_PASSWORD: finance_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+  finance_backend:
+    build: ./backend
+    working_dir: /app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://finance_user:finance_pass@finance_db:5432/finance_tracker
+    depends_on:
+      - finance_db
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+
+  finance_frontend:
+    build: ./frontend
+    working_dir: /app
+    command: sh -c "npm install && CHOKIDAR_USEPOLLING=true WATCHPACK_POLLING=true npm start"
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://192.168.64.7:8000
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    depends_on:
+      - finance_backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:

@@ -1,0 +1,30 @@
+/* Minimal global styles; Tailwind comes from the CDN in public/index.html */
+:root { 
+  color-scheme: light; 
+}
+
+html, body, #root { 
+  height: 100%; 
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
+    Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+  background-color: #f3f4f6; /* gray-100 */
+  color: #111827; /* gray-900 */
+}
+
+a { 
+  color: inherit; 
+  text-decoration: none; 
+}
+
+button { 
+  cursor: pointer; 
+}
+
+/* Prevent form submission page jumps */
+form {
+  margin: 0;
+}
