@@ -886,7 +886,12 @@ function App() {
                   <Labeled label="Interest Type">
                     <select
                       value={payeeAccountEdits.interest_type}
-                      onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, interest_type: e.target.value })}
+                      onChange={e =>
+                        setPayeeAccountEdits({
+                          ...payeeAccountEdits,
+                          interest_rate: e.target.value === "" ? null : parseFloat(e.target.value)
+                        })
+                      }
                       className="w-full border rounded p-2"
                     >
                       <option value="none">None</option>

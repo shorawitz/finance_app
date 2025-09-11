@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 # ---------- Accounts ----------
@@ -58,7 +58,6 @@ class PayeeAccountBase(BaseModel):
     interest_type: Literal["none", "pif", "compound", "loan"] = "none"
     interest_rate: float = 0.0
     current_balance: Decimal = Decimal("0")
-    # For loan-type accounts we track principal and accrued interest separately.
     principal_balance: Decimal = Decimal("0")
     accrued_interest: Decimal = Decimal("0")
     due_date: Optional[date] = None
@@ -114,13 +113,6 @@ class TransferCreate(BaseModel):
     to_account_id: int
     amount: Decimal
     date: date
-
-
-class TransferUpdate(BaseModel):
-    from_account_id: Optional[int] = None
-    to_account_id: Optional[int] = None
-    amount: Optional[Decimal] = None
-    date: Optional[date] = None
 
 
 class TransferRead(TransferCreate):

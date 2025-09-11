@@ -8,7 +8,7 @@ from models import Deposit, Payment, PayeeAccount, Account
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 # 1) Deposits by source (optionally by date range and/or account)
-@router.get("/deposits/by-source")
+@router.get("/deposits-by-source")
 def deposits_by_source(
     db: Session = Depends(get_db),
     start_date: date | None = None,
@@ -34,7 +34,7 @@ def deposits_by_source(
     ]
 
 # 2) Payee balances summary (group by payee and by category)
-@router.get("/payees/balances-summary")
+@router.get("/payees-balances-summary")
 def payee_balances_summary(db: Session = Depends(get_db)):
     # by payee
     by_payee = db.query(
@@ -53,9 +53,8 @@ def payee_balances_summary(db: Session = Depends(get_db)):
         "by_category": [{"category": cat, "total_balance": float(total or 0.0)} for cat, total in by_category]
     }
 
-# 3) Payment history for a payee account (principal vs interest applied)
-# Note: This assumes you store splits on payment (optional). If not, we still return raw payments.
-@router.get("/payments/history")
+# 3) Payment history for a payee account
+@router.get("/payments-history")
 def payments_history(
     db: Session = Depends(get_db),
     payee_account_id: int | None = None,
@@ -71,7 +70,6 @@ def payments_history(
         q = q.filter(Payment.date <= end_date)
 
     payments = q.all()
-    # If you later track interest/principal split per payment, include fields here.
     return [
         {
             "id": p.id,
@@ -83,20 +81,17 @@ def payments_history(
     ]
 
 # 4) Cash flow by month (net inflow/outflow), excluding transfers
-# inflow: deposits; outflow: payments
-@router.get("/cashflow/monthly")
+@router.get("/cashflow-monthly")
 def cashflow_monthly(
     db: Session = Depends(get_db),
     year: int | None = None
 ):
-    # Deposits per month
     dq = db.query(
         extract('year', Deposit.date).label("y"),
         extract('month', Deposit.date).label("m"),
         func.sum(Deposit.amount).label("inflow")
     ).group_by("y", "m")
 
-    # Payments per month
     pq = db.query(
         extract('year', Payment.date).label("y"),
         extract('month', Payment.date).label("m"),
@@ -125,7 +120,7 @@ def cashflow_monthly(
     return result
 
 # 5) Upcoming due dates (next N days)
-@router.get("/payees/upcoming-due")
+@router.get("/payees-upcoming-due")
 def upcoming_due(
     db: Session = Depends(get_db),
     within_days: int = 21

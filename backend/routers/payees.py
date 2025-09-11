@@ -1,16 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-
 from database import get_db
 import models, schemas
 
 router = APIRouter(prefix="/payees", tags=["payees"])
 
-# -------------------------
-# Payees
-# -------------------------
-@router.post("", response_model=schemas.PayeeRead)
+
+@router.get("/", response_model=list[schemas.PayeeRead])
+def list_payees(db: Session = Depends(get_db)):
+    return db.query(models.Payee).all()
+
+
+@router.post("/", response_model=schemas.PayeeRead)
 def create_payee(payee: schemas.PayeeCreate, db: Session = Depends(get_db)):
     db_payee = models.Payee(**payee.dict())
     db.add(db_payee)
@@ -19,30 +20,23 @@ def create_payee(payee: schemas.PayeeCreate, db: Session = Depends(get_db)):
     return db_payee
 
 
-@router.get("", response_model=List[schemas.PayeeRead])
-def list_payees(db: Session = Depends(get_db)):
-    return db.query(models.Payee).all()
-
-
-# -------------------------
-# Payee Accounts
-# -------------------------
-@router.post("/accounts", response_model=schemas.PayeeAccountRead)
-def create_payee_account(
-    payee_account: schemas.PayeeAccountCreate, db: Session = Depends(get_db)
-):
-    # Check payee exists
-    payee = db.query(models.Payee).filter(models.Payee.id == payee_account.payee_id).first()
-    if not payee:
+@router.put("/{payee_id}", response_model=schemas.PayeeRead)
+def update_payee(payee_id: int, payee: schemas.PayeeUpdate, db: Session = Depends(get_db)):
+    db_payee = db.query(models.Payee).filter(models.Payee.id == payee_id).first()
+    if not db_payee:
         raise HTTPException(status_code=404, detail="Payee not found")
-
-    db_pa = models.PayeeAccount(**payee_account.dict())
-    db.add(db_pa)
+    for field, value in payee.dict(exclude_unset=True).items():
+        setattr(db_payee, field, value)
     db.commit()
-    db.refresh(db_pa)
-    return db_pa
+    db.refresh(db_payee)
+    return db_payee
 
 
-@router.get("/accounts", response_model=List[schemas.PayeeAccountRead])
-def list_payee_accounts(db: Session = Depends(get_db)):
-    return db.query(models.PayeeAccount).all()
+@router.delete("/{payee_id}")
+def delete_payee(payee_id: int, db: Session = Depends(get_db)):
+    db_payee = db.query(models.Payee).filter(models.Payee.id == payee_id).first()
+    if not db_payee:
+        raise HTTPException(status_code=404, detail="Payee not found")
+    db.delete(db_payee)
+    db.commit()
+    return {"ok": True}
