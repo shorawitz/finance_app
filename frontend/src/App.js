@@ -179,74 +179,191 @@ function App() {
   const totalCash = accounts.reduce((sum, a) => sum + Number(a.balance), 0);
   const totalDue = payeeAccountsEnriched.reduce((sum, pa) => sum + Number(pa.current_balance), 0);
 
-  // CREATE handlers
+  // CREATE handlers with validation
   async function createAccount() {
-    const payload = { ...newAccount, balance: Number(newAccount.balance || 0) };
-    await apiCreateAccount(payload);
-    const accs = await getAccounts();
-    setAccounts(accs);
-    setNewAccount({ user_id: 1, type: 'checking', nickname: '', balance: '' });
+    // Validation
+    if (!newAccount.nickname || newAccount.nickname.trim() === '') {
+      alert('Account nickname is required.');
+      return;
+    }
+    if (newAccount.balance === '' || isNaN(parseFloat(newAccount.balance))) {
+      alert('Starting balance is required and must be a valid number.');
+      return;
+    }
+
+    try {
+      const payload = { ...newAccount, balance: parseFloat(newAccount.balance), user_id: 1 };
+      await apiCreateAccount(payload);
+      const accs = await getAccounts();
+      setAccounts(accs);
+      setNewAccount({ user_id: 1, type: 'checking', nickname: '', balance: '' });
+    } catch (error) {
+      alert(`Failed to create account: ${error.message}`);
+    }
   }
 
   async function createDeposit() {
-    const payload = { ...depositForm, amount: Number(depositForm.amount || 0) };
-    await apiCreateDeposit(payload);
-    setDeposits(await getDeposits());
-    setDepositForm({ ...depositForm, source: '', amount: '' });
-    // charts refresh
-    setDepositsBySource(await getDepositsBySource());
-    setCashflowMonthly(await getCashflowMonthly());
+    // Validation
+    if (!depositForm.account_id) {
+      alert('Please select an account.');
+      return;
+    }
+    if (!depositForm.source || depositForm.source.trim() === '') {
+      alert('Deposit source is required.');
+      return;
+    }
+    if (depositForm.amount === '' || isNaN(parseFloat(depositForm.amount)) || parseFloat(depositForm.amount) <= 0) {
+      alert('Amount is required and must be greater than 0.');
+      return;
+    }
+    if (!depositForm.date) {
+      alert('Date is required.');
+      return;
+    }
+
+    try {
+      const payload = { ...depositForm, amount: parseFloat(depositForm.amount) };
+      await apiCreateDeposit(payload);
+      setDeposits(await getDeposits());
+      setDepositForm({ ...depositForm, source: '', amount: '' });
+      // charts refresh
+      setDepositsBySource(await getDepositsBySource());
+      setCashflowMonthly(await getCashflowMonthly());
+    } catch (error) {
+      alert(`Failed to create deposit: ${error.message}`);
+    }
   }
 
   async function createTransfer() {
-    const payload = { ...transferForm, amount: Number(transferForm.amount || 0) };
-    await apiCreateTransfer(payload);
-    setTransfers(await getTransfers());
-    setTransferForm({ ...transferForm, amount: '' });
-    // charts refresh
-    setCashflowMonthly(await getCashflowMonthly());
+    // Validation
+    if (!transferForm.from_account_id) {
+      alert('Please select a "from" account.');
+      return;
+    }
+    if (!transferForm.to_account_id) {
+      alert('Please select a "to" account.');
+      return;
+    }
+    if (transferForm.from_account_id === transferForm.to_account_id) {
+      alert('From and To accounts must be different.');
+      return;
+    }
+    if (transferForm.amount === '' || isNaN(parseFloat(transferForm.amount)) || parseFloat(transferForm.amount) <= 0) {
+      alert('Amount is required and must be greater than 0.');
+      return;
+    }
+    if (!transferForm.date) {
+      alert('Date is required.');
+      return;
+    }
+
+    try {
+      const payload = { ...transferForm, amount: parseFloat(transferForm.amount) };
+      await apiCreateTransfer(payload);
+      setTransfers(await getTransfers());
+      setTransferForm({ ...transferForm, amount: '' });
+      // charts refresh
+      setCashflowMonthly(await getCashflowMonthly());
+    } catch (error) {
+      alert(`Failed to create transfer: ${error.message}`);
+    }
   }
 
   async function createPayee() {
-    await apiCreatePayee(payeeForm);
-    setPayees(await getPayees());
-    setPayeeForm({ name: '' });
+    // Validation
+    if (!payeeForm.name || payeeForm.name.trim() === '') {
+      alert('Payee name is required.');
+      return;
+    }
+
+    try {
+      await apiCreatePayee({ ...payeeForm, user_id: 1 });
+      setPayees(await getPayees());
+      setPayeeForm({ name: '' });
+    } catch (error) {
+      alert(`Failed to create payee: ${error.message}`);
+    }
   }
 
   async function createPayeeAccount() {
-    const payload = {
-      ...payeeAccountForm,
-      interest_rate: Number(payeeAccountForm.interest_rate || 0),
-      current_balance: Number(payeeAccountForm.current_balance || 0),
-      principal_balance: Number(payeeAccountForm.principal_balance || 0),
-      accrued_interest: Number(payeeAccountForm.accrued_interest || 0)
-    };
-    await apiCreatePayeeAccount(payload);
-    setPayeeAccounts(await getPayeeAccounts());
-    setPayeeAccountForm({
-      payee_id: payees[0]?.id ?? null,
-      account_label: '',
-      account_number: '',
-      category: 'credit card',
-      interest_type: 'none',
-      interest_rate: 0,
-      current_balance: 0,
-      principal_balance: 0,
-      accrued_interest: 0,
-      due_date: new Date().toISOString().slice(0, 10)
-    });
+    // Validation
+    if (!payeeAccountForm.payee_id) {
+      alert('Please select a payee.');
+      return;
+    }
+    if (!payeeAccountForm.account_label || payeeAccountForm.account_label.trim() === '') {
+      alert('Account label is required.');
+      return;
+    }
+    if (!payeeAccountForm.category) {
+      alert('Please select a category.');
+      return;
+    }
+    if (!payeeAccountForm.due_date) {
+      alert('Due date is required.');
+      return;
+    }
+
+    try {
+      const payload = {
+        ...payeeAccountForm,
+        interest_rate: payeeAccountForm.interest_rate === '' ? null : parseFloat(payeeAccountForm.interest_rate),
+        current_balance: payeeAccountForm.current_balance === '' ? null : parseFloat(payeeAccountForm.current_balance),
+        principal_balance: payeeAccountForm.principal_balance === '' ? null : parseFloat(payeeAccountForm.principal_balance),
+        accrued_interest: payeeAccountForm.accrued_interest === '' ? null : parseFloat(payeeAccountForm.accrued_interest),
+        user_id: 1
+      };
+      await apiCreatePayeeAccount(payload);
+      setPayeeAccounts(await getPayeeAccounts());
+      setPayeeAccountForm({
+        payee_id: payees[0]?.id ?? null,
+        account_label: '',
+        account_number: '',
+        category: 'credit card',
+        interest_type: 'none',
+        interest_rate: 0,
+        current_balance: 0,
+        principal_balance: 0,
+        accrued_interest: 0,
+        due_date: new Date().toISOString().slice(0, 10)
+      });
+    } catch (error) {
+      alert(`Failed to create payee account: ${error.message}`);
+    }
   }
 
   async function createPayment() {
-    const payload = { ...paymentForm, amount: Number(paymentForm.amount || 0) };
-    await apiCreatePayment(payload);
-    setPayments(await getPayments());
-    setPaymentForm({ ...paymentForm, amount: '' });
-    // charts refresh
-    setCashflowMonthly(await getCashflowMonthly());
+    // Validation
+    if (!paymentForm.checking_account_id) {
+      alert('Please select a checking account.');
+      return;
+    }
+    if (!paymentForm.payee_account_id) {
+      alert('Please select a payee account.');
+      return;
+    }
+    if (paymentForm.amount === '' || isNaN(parseFloat(paymentForm.amount)) || parseFloat(paymentForm.amount) <= 0) {
+      alert('Amount is required and must be greater than 0.');
+      return;
+    }
+    if (!paymentForm.date) {
+      alert('Date is required.');
+      return;
+    }
+
+    try {
+      const payload = { ...paymentForm, amount: parseFloat(paymentForm.amount) };
+      await apiCreatePayment(payload);
+      setPayments(await getPayments());
+      setPaymentForm({ ...paymentForm, amount: '' });
+      // charts refresh
+      setCashflowMonthly(await getCashflowMonthly());
+    } catch (error) {
+      alert(`Failed to create payment: ${error.message}`);
+    }
   }
 
-  // EDIT/DELETE handlers — Accounts
+  // EDIT/DELETE handlers — Accounts (with validation)
   function startEditAccount(a) {
     setEditingAccountId(a.id);
     setAccountEdits({
@@ -260,22 +377,40 @@ function App() {
     setAccountEdits({ nickname: '', type: 'checking', balance: '' });
   }
   async function saveEditAccount(id) {
-    const payload = {
-      nickname: accountEdits.nickname,
-      type: accountEdits.type,
-      balance: Number(accountEdits.balance || 0)
-    };
-    await updateAccount(id, payload);
-    setAccounts(await getAccounts());
-    cancelEditAccount();
+    // Validation
+    if (!accountEdits.nickname || accountEdits.nickname.trim() === '') {
+      alert('Account nickname is required.');
+      return;
+    }
+    if (accountEdits.balance === '' || isNaN(parseFloat(accountEdits.balance))) {
+      alert('Balance is required and must be a valid number.');
+      return;
+    }
+
+    try {
+      const payload = {
+        nickname: accountEdits.nickname,
+        type: accountEdits.type,
+        balance: parseFloat(accountEdits.balance)
+      };
+      await updateAccount(id, payload);
+      setAccounts(await getAccounts());
+      cancelEditAccount();
+    } catch (error) {
+      alert(`Failed to update account: ${error.message}`);
+    }
   }
   async function removeAccount(id) {
     if (!window.confirm('Delete this account? This cannot be undone.')) return;
-    await deleteAccount(id);
-    setAccounts(await getAccounts());
+    try {
+      await deleteAccount(id);
+      setAccounts(await getAccounts());
+    } catch (error) {
+      alert(`Failed to delete account: ${error.message}`);
+    }
   }
 
-  // EDIT/DELETE handlers — Deposits
+  // EDIT/DELETE handlers — Deposits (with validation)
   function startEditDeposit(d) {
     setEditingDepositId(d.id);
     setDepositEdits({
@@ -290,28 +425,54 @@ function App() {
     setDepositEdits({ account_id: null, source: '', amount: '', date: '' });
   }
   async function saveEditDeposit(id) {
-    const payload = {
-      account_id: Number(depositEdits.account_id),
-      source: depositEdits.source,
-      amount: Number(depositEdits.amount || 0),
-      date: depositEdits.date
-    };
-    await updateDeposit(id, payload);
-    setDeposits(await getDeposits());
-    cancelEditDeposit();
-    // charts refresh
-    setDepositsBySource(await getDepositsBySource());
-    setCashflowMonthly(await getCashflowMonthly());
+    // Validation
+    if (!depositEdits.account_id) {
+      alert('Please select an account.');
+      return;
+    }
+    if (!depositEdits.source || depositEdits.source.trim() === '') {
+      alert('Deposit source is required.');
+      return;
+    }
+    if (depositEdits.amount === '' || isNaN(parseFloat(depositEdits.amount)) || parseFloat(depositEdits.amount) <= 0) {
+      alert('Amount is required and must be greater than 0.');
+      return;
+    }
+    if (!depositEdits.date) {
+      alert('Date is required.');
+      return;
+    }
+
+    try {
+      const payload = {
+        account_id: Number(depositEdits.account_id),
+        source: depositEdits.source,
+        amount: parseFloat(depositEdits.amount),
+        date: depositEdits.date
+      };
+      await updateDeposit(id, payload);
+      setDeposits(await getDeposits());
+      cancelEditDeposit();
+      // charts refresh
+      setDepositsBySource(await getDepositsBySource());
+      setCashflowMonthly(await getCashflowMonthly());
+    } catch (error) {
+      alert(`Failed to update deposit: ${error.message}`);
+    }
   }
   async function removeDeposit(id) {
     if (!window.confirm('Delete this deposit?')) return;
-    await deleteDeposit(id);
-    setDeposits(await getDeposits());
-    setDepositsBySource(await getDepositsBySource());
-    setCashflowMonthly(await getCashflowMonthly());
+    try {
+      await deleteDeposit(id);
+      setDeposits(await getDeposits());
+      setDepositsBySource(await getDepositsBySource());
+      setCashflowMonthly(await getCashflowMonthly());
+    } catch (error) {
+      alert(`Failed to delete deposit: ${error.message}`);
+    }
   }
 
-  // EDIT/DELETE handlers — Payments
+  // EDIT/DELETE handlers — Payments (with validation)
   function startEditPayment(p) {
     setEditingPaymentId(p.id);
     setPaymentEdits({
@@ -326,26 +487,52 @@ function App() {
     setPaymentEdits({ checking_account_id: null, payee_account_id: null, amount: '', date: '' });
   }
   async function saveEditPayment(id) {
-    const payload = {
-      checking_account_id: Number(paymentEdits.checking_account_id),
-      payee_account_id: Number(paymentEdits.payee_account_id),
-      amount: Number(paymentEdits.amount || 0),
-      date: paymentEdits.date
-    };
-    await updatePayment(id, payload);
-    setPayments(await getPayments());
-    cancelEditPayment();
-    // charts refresh
-    setCashflowMonthly(await getCashflowMonthly());
+    // Validation
+    if (!paymentEdits.checking_account_id) {
+      alert('Please select a checking account.');
+      return;
+    }
+    if (!paymentEdits.payee_account_id) {
+      alert('Please select a payee account.');
+      return;
+    }
+    if (paymentEdits.amount === '' || isNaN(parseFloat(paymentEdits.amount)) || parseFloat(paymentEdits.amount) <= 0) {
+      alert('Amount is required and must be greater than 0.');
+      return;
+    }
+    if (!paymentEdits.date) {
+      alert('Date is required.');
+      return;
+    }
+
+    try {
+      const payload = {
+        checking_account_id: Number(paymentEdits.checking_account_id),
+        payee_account_id: Number(paymentEdits.payee_account_id),
+        amount: parseFloat(paymentEdits.amount),
+        date: paymentEdits.date
+      };
+      await updatePayment(id, payload);
+      setPayments(await getPayments());
+      cancelEditPayment();
+      // charts refresh
+      setCashflowMonthly(await getCashflowMonthly());
+    } catch (error) {
+      alert(`Failed to update payment: ${error.message}`);
+    }
   }
   async function removePayment(id) {
     if (!window.confirm('Delete this payment?')) return;
-    await deletePayment(id);
-    setPayments(await getPayments());
-    setCashflowMonthly(await getCashflowMonthly());
+    try {
+      await deletePayment(id);
+      setPayments(await getPayments());
+      setCashflowMonthly(await getCashflowMonthly());
+    } catch (error) {
+      alert(`Failed to delete payment: ${error.message}`);
+    }
   }
 
-  // EDIT/DELETE handlers — Payees
+  // EDIT/DELETE handlers — Payees (with validation)
   function startEditPayee(p) {
     setEditingPayeeId(p.id);
     setPayeeEdits({ name: p.name || '' });
@@ -355,18 +542,32 @@ function App() {
     setPayeeEdits({ name: '' });
   }
   async function saveEditPayee(id) {
-    await updatePayee(id, { name: payeeEdits.name });
-    setPayees(await getPayees());
-    cancelEditPayee();
+    // Validation
+    if (!payeeEdits.name || payeeEdits.name.trim() === '') {
+      alert('Payee name is required.');
+      return;
+    }
+
+    try {
+      await updatePayee(id, { name: payeeEdits.name });
+      setPayees(await getPayees());
+      cancelEditPayee();
+    } catch (error) {
+      alert(`Failed to update payee: ${error.message}`);
+    }
   }
   async function removePayee(id) {
     if (!window.confirm('Delete this payee?')) return;
-    await deletePayee(id);
-    setPayees(await getPayees());
-    setPayeeAccounts(await getPayeeAccounts());
+    try {
+      await deletePayee(id);
+      setPayees(await getPayees());
+      setPayeeAccounts(await getPayeeAccounts());
+    } catch (error) {
+      alert(`Failed to delete payee: ${error.message}`);
+    }
   }
 
-  // EDIT/DELETE handlers — Payee Accounts
+  // EDIT/DELETE handlers — Payee Accounts (with validation)
   function startEditPayeeAccount(pa) {
     setEditingPayeeAccountId(pa.id);
     setPayeeAccountEdits({
@@ -375,10 +576,10 @@ function App() {
       account_number: pa.account_number || '',
       category: pa.category || 'credit card',
       interest_type: pa.interest_type || 'none',
-      interest_rate: pa.interest_rate ?? 0,
-      current_balance: pa.current_balance ?? 0,
-      principal_balance: pa.principal_balance ?? 0,
-      accrued_interest: pa.accrued_interest ?? 0,
+      interest_rate: pa.interest_rate ?? null,
+      current_balance: pa.current_balance ?? null,
+      principal_balance: pa.principal_balance ?? null,
+      accrued_interest: pa.accrued_interest ?? null,
       due_date: pa.due_date?.slice(0, 10) || new Date().toISOString().slice(0, 10)
     });
   }
@@ -398,22 +599,48 @@ function App() {
     });
   }
   async function saveEditPayeeAccount(id) {
-    const payload = {
-      ...payeeAccountEdits,
-      payee_id: Number(payeeAccountEdits.payee_id),
-      interest_rate: Number(payeeAccountEdits.interest_rate || 0),
-      current_balance: Number(payeeAccountEdits.current_balance || 0),
-      principal_balance: Number(payeeAccountEdits.principal_balance || 0),
-      accrued_interest: Number(payeeAccountEdits.accrued_interest || 0)
-    };
-    await updatePayeeAccount(id, payload);
-    setPayeeAccounts(await getPayeeAccounts());
-    cancelEditPayeeAccount();
+    // Validation
+    if (!payeeAccountEdits.payee_id) {
+      alert('Please select a payee.');
+      return;
+    }
+    if (!payeeAccountEdits.account_label || payeeAccountEdits.account_label.trim() === '') {
+      alert('Account label is required.');
+      return;
+    }
+    if (!payeeAccountEdits.category) {
+      alert('Please select a category.');
+      return;
+    }
+    if (!payeeAccountEdits.due_date) {
+      alert('Due date is required.');
+      return;
+    }
+
+    try {
+      const payload = {
+        ...payeeAccountEdits,
+        payee_id: Number(payeeAccountEdits.payee_id),
+        interest_rate: payeeAccountEdits.interest_rate === null || payeeAccountEdits.interest_rate === '' ? null : parseFloat(payeeAccountEdits.interest_rate),
+        current_balance: payeeAccountEdits.current_balance === null || payeeAccountEdits.current_balance === '' ? null : parseFloat(payeeAccountEdits.current_balance),
+        principal_balance: payeeAccountEdits.principal_balance === null || payeeAccountEdits.principal_balance === '' ? null : parseFloat(payeeAccountEdits.principal_balance),
+        accrued_interest: payeeAccountEdits.accrued_interest === null || payeeAccountEdits.accrued_interest === '' ? null : parseFloat(payeeAccountEdits.accrued_interest),
+      };
+      await updatePayeeAccount(id, payload);
+      setPayeeAccounts(await getPayeeAccounts());
+      cancelEditPayeeAccount();
+    } catch (error) {
+      alert(`Failed to update payee account: ${error.message}`);
+    }
   }
   async function removePayeeAccount(id) {
     if (!window.confirm('Delete this payee account?')) return;
-    await deletePayeeAccount(id);
-    setPayeeAccounts(await getPayeeAccounts());
+    try {
+      await deletePayeeAccount(id);
+      setPayeeAccounts(await getPayeeAccounts());
+    } catch (error) {
+      alert(`Failed to delete payee account: ${error.message}`);
+    }
   }
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
@@ -454,6 +681,7 @@ function App() {
                       value={paymentEdits.checking_account_id || ''}
                       onChange={e => setPaymentEdits({ ...paymentEdits, checking_account_id: Number(e.target.value) })}
                       className="w-full border rounded p-2"
+                      required
                     >
                       {accounts.filter(a => a.type === 'checking').map(a => <option key={a.id} value={a.id}>{a.nickname}</option>)}
                     </select>
@@ -463,6 +691,7 @@ function App() {
                       value={paymentEdits.payee_account_id || ''}
                       onChange={e => setPaymentEdits({ ...paymentEdits, payee_account_id: Number(e.target.value) })}
                       className="w-full border rounded p-2"
+                      required
                     >
                       {payeeAccountsEnriched.map(pa => <option key={pa.id} value={pa.id}>{pa.payee_name} - {pa.account_label}</option>)}
                     </select>
@@ -471,16 +700,20 @@ function App() {
                     <input
                       type="number"
                       className="w-full border rounded p-2"
-                      value={paymentEdits.amount}
-                      onChange={e => setPaymentEdits({ ...paymentEdits, amount: e.target.value })}
+                      value={paymentEdits.amount ?? ""}
+                      onChange={e => setPaymentEdits({ ...paymentEdits, amount: e.target.value === "" ? "" : parseFloat(e.target.value) })}
+                      required
+                      min="0.01"
+                      step="0.01"
                     />
                   </Labeled>
                   <Labeled label="Date">
                     <input
                       type="date"
                       className="w-full border rounded p-2"
-                      value={paymentEdits.date}
+                      value={paymentEdits.date ?? ""}
                       onChange={e => setPaymentEdits({ ...paymentEdits, date: e.target.value })}
+                      required
                     />
                   </Labeled>
                   <div className="flex gap-2">
@@ -507,6 +740,7 @@ function App() {
               value={paymentForm.checking_account_id || ''}
               onChange={e => setPaymentForm({ ...paymentForm, checking_account_id: Number(e.target.value) })}
               className="w-full border rounded p-2"
+              required
             >
               {accounts.filter(a => a.type === 'checking').map(a => <option key={a.id} value={a.id}>{a.nickname}</option>)}
             </select>
@@ -516,6 +750,7 @@ function App() {
               value={paymentForm.payee_account_id || ''}
               onChange={e => setPaymentForm({ ...paymentForm, payee_account_id: Number(e.target.value) })}
               className="w-full border rounded p-2"
+              required
             >
               {payeeAccountsEnriched.map(pa => <option key={pa.id} value={pa.id}>{pa.payee_name} - {pa.account_label}</option>)}
             </select>
@@ -524,16 +759,20 @@ function App() {
             <input
               type="number"
               className="w-full border rounded p-2"
-              value={paymentForm.amount}
-              onChange={e => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+              value={paymentForm.amount ?? ""}
+              onChange={e => setPaymentForm({ ...paymentForm, amount: e.target.value === "" ? "" : parseFloat(e.target.value) })}
+              required
+              min="0.01"
+              step="0.01"
             />
           </Labeled>
           <Labeled label="Date">
             <input
               type="date"
               className="w-full border rounded p-2"
-              value={paymentForm.date}
+              value={paymentForm.date ?? ""}
               onChange={e => setPaymentForm({ ...paymentForm, date: e.target.value })}
+              required
             />
           </Labeled>
         </div>
@@ -545,6 +784,9 @@ function App() {
           Add Payment
         </button>
       </Card>
+
+      {/* Rest of the components with similar validation patterns... */}
+      {/* I'll continue with the remaining sections in the same pattern */}
 
       {/* Deposits second */}
       <Card title="Deposits" right={<span className="text-sm text-gray-500">{deposits.length} total</span>}>
@@ -558,6 +800,7 @@ function App() {
                       value={depositEdits.account_id || ''}
                       onChange={e => setDepositEdits({ ...depositEdits, account_id: Number(e.target.value) })}
                       className="w-full border rounded p-2"
+                      required
                     >
                       {accounts.map(a => <option key={a.id} value={a.id}>{a.nickname}</option>)}
                     </select>
@@ -567,22 +810,27 @@ function App() {
                       className="w-full border rounded p-2"
                       value={depositEdits.source}
                       onChange={e => setDepositEdits({ ...depositEdits, source: e.target.value })}
+                      required
                     />
                   </Labeled>
                   <Labeled label="Amount">
                     <input
                       type="number"
                       className="w-full border rounded p-2"
-                      value={depositEdits.amount}
-                      onChange={e => setDepositEdits({ ...depositEdits, amount: e.target.value })}
+                      value={depositEdits.amount ?? ""}
+                      onChange={e => setDepositEdits({ ...depositEdits, amount: e.target.value === "" ? "" : parseFloat(e.target.value) })}
+                      required
+                      min="0.01"
+                      step="0.01"
                     />
                   </Labeled>
                   <Labeled label="Date">
                     <input
                       type="date"
                       className="w-full border rounded p-2"
-                      value={depositEdits.date}
+                      value={depositEdits.date ?? ""}
                       onChange={e => setDepositEdits({ ...depositEdits, date: e.target.value })}
+                      required
                     />
                   </Labeled>
                   <div className="flex gap-2">
@@ -609,6 +857,7 @@ function App() {
               value={depositForm.account_id || ''}
               onChange={e => setDepositForm({ ...depositForm, account_id: Number(e.target.value) })}
               className="w-full border rounded p-2"
+              required
             >
               {accounts.map(a => <option key={a.id} value={a.id}>{a.nickname}</option>)}
             </select>
@@ -619,22 +868,27 @@ function App() {
               value={depositForm.source}
               onChange={e => setDepositForm({ ...depositForm, source: e.target.value })}
               placeholder="e.g., Salary"
+              required
             />
           </Labeled>
           <Labeled label="Amount">
             <input
               type="number"
               className="w-full border rounded p-2"
-              value={depositForm.amount}
-              onChange={e => setDepositForm({ ...depositForm, amount: e.target.value })}
+              value={depositForm.amount ?? ""}
+              onChange={e => setDepositForm({ ...depositForm, amount: e.target.value === "" ? "" : parseFloat(e.target.value) })}
+              required
+              min="0.01"
+              step="0.01"
             />
           </Labeled>
           <Labeled label="Date">
             <input
               type="date"
               className="w-full border rounded p-2"
-              value={depositForm.date}
+              value={depositForm.date ?? ""}
               onChange={e => setDepositForm({ ...depositForm, date: e.target.value })}
+              required
             />
           </Labeled>
         </div>
@@ -647,7 +901,10 @@ function App() {
         </button>
       </Card>
 
-      {/* Transfers third (read-only for now) */}
+      {/* Continue with remaining sections... */}
+      {/* I'll include the rest of the components with the same validation pattern */}
+
+      {/* Transfers third */}
       <Card title="Transfers" right={<span className="text-sm text-gray-500">{transfers.length} total</span>}>
         <ul className="divide-y mb-4 max-h-56 overflow-y-auto">
           {transfers.map(t => (
@@ -663,6 +920,7 @@ function App() {
               value={transferForm.from_account_id || ''}
               onChange={e => setTransferForm({ ...transferForm, from_account_id: Number(e.target.value) })}
               className="w-full border rounded p-2"
+              required
             >
               {accounts.map(a => <option key={a.id} value={a.id}>{a.nickname}</option>)}
             </select>
@@ -672,6 +930,7 @@ function App() {
               value={transferForm.to_account_id || ''}
               onChange={e => setTransferForm({ ...transferForm, to_account_id: Number(e.target.value) })}
               className="w-full border rounded p-2"
+              required
             >
               {accounts.map(a => <option key={a.id} value={a.id}>{a.nickname}</option>)}
             </select>
@@ -680,16 +939,20 @@ function App() {
             <input
               type="number"
               className="w-full border rounded p-2"
-              value={transferForm.amount}
-              onChange={e => setTransferForm({ ...transferForm, amount: e.target.value })}
+              value={transferForm.amount ?? ""}
+              onChange={e => setTransferForm({ ...transferForm, amount: e.target.value === "" ? "" : parseFloat(e.target.value) })}
+              required
+              min="0.01"
+              step="0.01"
             />
           </Labeled>
           <Labeled label="Date">
             <input
               type="date"
               className="w-full border rounded p-2"
-              value={transferForm.date}
+              value={transferForm.date ?? ""}
               onChange={e => setTransferForm({ ...transferForm, date: e.target.value })}
+              required
             />
           </Labeled>
         </div>
@@ -714,6 +977,7 @@ function App() {
                       className="w-full border rounded p-2"
                       value={accountEdits.nickname}
                       onChange={e => setAccountEdits({ ...accountEdits, nickname: e.target.value })}
+                      required
                     />
                   </Labeled>
                   <Labeled label="Type">
@@ -721,6 +985,7 @@ function App() {
                       value={accountEdits.type}
                       onChange={e => setAccountEdits({ ...accountEdits, type: e.target.value })}
                       className="w-full border rounded p-2"
+                      required
                     >
                       <option value="checking">checking</option>
                       <option value="savings">savings</option>
@@ -730,8 +995,10 @@ function App() {
                     <input
                       type="number"
                       className="w-full border rounded p-2"
-                      value={accountEdits.balance}
-                      onChange={e => setAccountEdits({ ...accountEdits, balance: e.target.value })}
+                      value={accountEdits.balance ?? ""}
+                      onChange={e => setAccountEdits({ ...accountEdits, balance: e.target.value === "" ? "" : parseFloat(e.target.value) })}
+                      required
+                      step="0.01"
                     />
                   </Labeled>
                   <div className="text-xs text-gray-500 self-center">ID {a.id}</div>
@@ -763,6 +1030,7 @@ function App() {
               value={newAccount.type}
               onChange={e => setNewAccount({ ...newAccount, type: e.target.value })}
               className="w-full border rounded p-2"
+              required
             >
               <option value="checking">checking</option>
               <option value="savings">savings</option>
@@ -774,14 +1042,17 @@ function App() {
               value={newAccount.nickname}
               onChange={e => setNewAccount({ ...newAccount, nickname: e.target.value })}
               placeholder="e.g., Travel Checking"
+              required
             />
           </Labeled>
           <Labeled label="Start Balance">
             <input
               type="number"
               className="w-full border rounded p-2"
-              value={newAccount.balance}
-              onChange={e => setNewAccount({ ...newAccount, balance: e.target.value })}
+              value={newAccount.balance ?? ""}
+              onChange={e => setNewAccount({ ...newAccount, balance: e.target.value === "" ? "" : parseFloat(e.target.value) })}
+              required
+              step="0.01"
             />
           </Labeled>
         </div>
@@ -806,6 +1077,7 @@ function App() {
                       className="w-full border rounded p-2"
                       value={payeeEdits.name}
                       onChange={e => setPayeeEdits({ ...payeeEdits, name: e.target.value })}
+                      required
                     />
                   </Labeled>
                   <div className="text-xs text-gray-500 self-center">ID {p.id}</div>
@@ -836,6 +1108,7 @@ function App() {
               value={payeeForm.name}
               onChange={e => setPayeeForm({ ...payeeForm, name: e.target.value })}
               placeholder="e.g., Chase Credit Card"
+              required
             />
           </Labeled>
         </div>
@@ -860,6 +1133,7 @@ function App() {
                       value={payeeAccountEdits.payee_id || ''}
                       onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, payee_id: Number(e.target.value) })}
                       className="w-full border rounded p-2"
+                      required
                     >
                       {payees.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
@@ -869,6 +1143,7 @@ function App() {
                       className="w-full border rounded p-2"
                       value={payeeAccountEdits.account_label}
                       onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, account_label: e.target.value })}
+                      required
                     />
                   </Labeled>
                   <Labeled label="Category">
@@ -876,6 +1151,7 @@ function App() {
                       value={payeeAccountEdits.category}
                       onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, category: e.target.value })}
                       className="w-full border rounded p-2"
+                      required
                     >
                       <option value="credit card">Credit Card</option>
                       <option value="loan">Loan</option>
@@ -889,14 +1165,16 @@ function App() {
                       onChange={e =>
                         setPayeeAccountEdits({
                           ...payeeAccountEdits,
-                          interest_rate: e.target.value === "" ? null : parseFloat(e.target.value)
+                          interest_type: e.target.value
                         })
                       }
                       className="w-full border rounded p-2"
+                      required
                     >
                       <option value="none">None</option>
-                      <option value="simple">Simple</option>
+                      <option value="pif">Pay In Full (pif)</option>
                       <option value="compound">Compound</option>
+                      <option value="loan">Loan</option>
                     </select>
                   </Labeled>
                   <div className="flex gap-2">
@@ -907,41 +1185,66 @@ function App() {
                   <Labeled label="Interest Rate (%)">
                     <input
                       type="number"
+                      step="0.01"
                       className="w-full border rounded p-2"
-                      value={payeeAccountEdits.interest_rate}
-                      onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, interest_rate: e.target.value })}
+                      value={payeeAccountEdits.interest_rate ?? ""}
+                      onChange={e =>
+                        setPayeeAccountEdits({
+                          ...payeeAccountEdits,
+                          interest_rate: e.target.value === "" ? null : parseFloat(e.target.value)
+                        })
+                      }
                     />
                   </Labeled>
                   <Labeled label="Current Balance">
                     <input
                       type="number"
+                      step="0.01"
                       className="w-full border rounded p-2"
-                      value={payeeAccountEdits.current_balance}
-                      onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, current_balance: e.target.value })}
+                      value={payeeAccountEdits.current_balance ?? ""}
+                      onChange={e =>
+                        setPayeeAccountEdits({
+                          ...payeeAccountEdits,
+                          current_balance: e.target.value === "" ? null : parseFloat(e.target.value)
+                        })
+                      }
                     />
                   </Labeled>
                   <Labeled label="Principal Balance">
                     <input
                       type="number"
+                      step="0.01"
                       className="w-full border rounded p-2"
-                      value={payeeAccountEdits.principal_balance}
-                      onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, principal_balance: e.target.value })}
+                      value={payeeAccountEdits.principal_balance ?? ""}
+                      onChange={e =>
+                        setPayeeAccountEdits({
+                          ...payeeAccountEdits,
+                          principal_balance: e.target.value === "" ? null : parseFloat(e.target.value)
+                        })
+                      }
                     />
                   </Labeled>
                   <Labeled label="Accrued Interest">
                     <input
                       type="number"
+                      step="0.01"
                       className="w-full border rounded p-2"
-                      value={payeeAccountEdits.accrued_interest}
-                      onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, accrued_interest: e.target.value })}
+                      value={payeeAccountEdits.accrued_interest ?? ""}
+                      onChange={e =>
+                        setPayeeAccountEdits({
+                          ...payeeAccountEdits,
+                          accrued_interest: e.target.value === "" ? null : parseFloat(e.target.value)
+                        })
+                      }
                     />
                   </Labeled>
                   <Labeled label="Due Date">
                     <input
                       type="date"
                       className="w-full border rounded p-2"
-                      value={payeeAccountEdits.due_date}
+                      value={payeeAccountEdits.due_date ?? ""}
                       onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, due_date: e.target.value })}
+                      required
                     />
                   </Labeled>
                 </div>
@@ -965,13 +1268,14 @@ function App() {
           ))}
         </ul>
 
-        {/* Ensure the "Add Payee Account" button and form exist (you mentioned it looked missing) */}
+        {/* Ensure the "Add Payee Account" button and form exist */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
           <Labeled label="Payee">
             <select
               value={payeeAccountForm.payee_id || ''}
               onChange={e => setPayeeAccountForm({ ...payeeAccountForm, payee_id: Number(e.target.value) })}
               className="w-full border rounded p-2"
+              required
             >
               {payees.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
@@ -982,6 +1286,7 @@ function App() {
               value={payeeAccountForm.account_label}
               onChange={e => setPayeeAccountForm({ ...payeeAccountForm, account_label: e.target.value })}
               placeholder="e.g., Visa Card"
+              required
             />
           </Labeled>
           <Labeled label="Category">
@@ -989,6 +1294,7 @@ function App() {
               value={payeeAccountForm.category}
               onChange={e => setPayeeAccountForm({ ...payeeAccountForm, category: e.target.value })}
               className="w-full border rounded p-2"
+              required
             >
               <option value="credit card">Credit Card</option>
               <option value="loan">Loan</option>
