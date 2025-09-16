@@ -41,6 +41,7 @@ class Deposit(Base):
 class Payee(Base):
     __tablename__ = "payees"
     id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False)
     name = Column(String, nullable=False)
 
     accounts = relationship("PayeeAccount", back_populates="payee")

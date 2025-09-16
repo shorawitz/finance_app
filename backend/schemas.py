@@ -36,6 +36,7 @@ class AccountRead(AccountBase):
 # ---------- Payees ----------
 class PayeeCreate(BaseModel):
     name: str
+    user_id: int
 
 
 class PayeeUpdate(BaseModel):

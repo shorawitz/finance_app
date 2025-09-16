@@ -1306,7 +1306,7 @@ function App() {
         <button
           type="button"
           onClick={createPayeeAccount}
-          className="mt-2 px-3 py-2 bg-orange-600 text-white rounded hover:bg-orange-700"
+          className="mt-2 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
         >
           Add Payee Account
         </button>
