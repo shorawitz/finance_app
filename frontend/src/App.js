@@ -1,3 +1,5 @@
+// Collapsible sections implementation
+
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   PieChart, Pie, Cell, Tooltip, Legend,
@@ -25,20 +27,35 @@ import {
   updatePayeeAccount, deletePayeeAccount
 } from './api';
 
+import './styles/theme.css';
+import './styles/buttons.css';
+import './styles/forms.css';
+
 // Simple helpers
-const Card = ({ title, right, children }) => (
-  <div className="bg-white shadow rounded p-4 mb-4">
+const Card = ({ title, right, children, collapsible = false, collapsed = false, onToggle }) => (
+  <div className="card">
     <div className="flex justify-between items-center mb-2">
-      <h2 className="font-semibold text-lg">{title}</h2>
+      <div className="flex items-center gap-2">
+        {collapsible && (
+          <button
+            onClick={onToggle}
+            className="text-lg hover:bg-gray-100 dark:hover:bg-gray-700 rounded p-1 transition-colors"
+            title={collapsed ? 'Expand section' : 'Collapse section'}
+          >
+            {collapsed ? '▶' : '▼'}
+          </button>
+        )}
+        <h2 className="font-semibold text-lg">{title}</h2>
+      </div>
       {right}
     </div>
-    {children}
+    {(!collapsible || !collapsed) && children}
   </div>
 );
 
 const Labeled = ({ label, children }) => (
-  <label className="block text-sm mb-2">
-    <span className="text-gray-600">{label}</span>
+  <label className="form-group">
+    <span className="form-label">{label}</span>
     {children}
   </label>
 );
@@ -53,6 +70,19 @@ function App() {
   const [deposits, setDeposits] = useState([]);
   const [payments, setPayments] = useState([]);
   const [transfers, setTransfers] = useState([]);
+
+  // Add theme state
+  const [theme, setTheme] = useState('light');
+
+  // Apply theme to document
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  // Toggle function
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
+  };
 
   // Form state (create)
   const [newAccount, setNewAccount] = useState({ user_id: 1, type: 'checking', nickname: '', balance: '' });
@@ -107,6 +137,16 @@ function App() {
   // Chart toggles
   const [showDepositsChart, setShowDepositsChart] = useState(true);
   const [showCashflowChart, setShowCashflowChart] = useState(true);
+
+  // Section collapse states
+  const [collapsedSections, setCollapsedSections] = useState({
+    payments: false,
+    deposits: false,
+    transfers: false,
+    accounts: false,
+    payees: false,
+    payeeAccounts: false
+  });
 
   // Initialization guard
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -645,32 +685,55 @@ function App() {
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
+  // Toggle section collapse
+  const toggleSection = (sectionName) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionName]: !prev[sectionName]
+    }));
+  };
+
   return (
-    <div className="p-4 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">Finance Dashboard</h1>
+    <div className="app-root">
+      <header className="app-header">
+        <h1 className="app-title">Finance Dashboard</h1>
+        <button
+          onClick={toggleTheme}
+          className="btn btn-secondary"
+          title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+        >
+          {theme === 'light' ? '🌙' : '☀️'}
+        </button>
+      </header>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="text-sm font-medium text-gray-500">Total Cash</h3>
-          <p className="text-2xl font-bold text-green-600">{formatMoney(totalCash)}</p>
+        <div className="card">
+          <h3 className="text-sm font-medium" style={{ color: 'var(--color-muted)' }}>Total Cash</h3>
+          <p className="text-2xl font-bold" style={{ color: 'var(--color-positive, #16a34a)' }}>{formatMoney(totalCash)}</p>
         </div>
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="text-sm font-medium text-gray-500">Total Due</h3>
-          <p className="text-2xl font-bold text-red-600">{formatMoney(totalDue)}</p>
+        <div className="card">
+          <h3 className="text-sm font-medium" style={{ color: 'var(--color-muted)' }}>Total Due</h3>
+          <p className="text-2xl font-bold" style={{ color: 'var(--color-negative, #dc2626)' }}>{formatMoney(totalDue)}</p>
         </div>
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="text-sm font-medium text-gray-500">Net Worth</h3>
-          <p className="text-2xl font-bold text-blue-600">{formatMoney(totalCash - totalDue)}</p>
+        <div className="card">
+          <h3 className="text-sm font-medium" style={{ color: 'var(--color-muted)' }}>Net Worth</h3>
+          <p className="text-2xl font-bold" style={{ color: 'var(--color-info, #2563eb)' }}>{formatMoney(totalCash - totalDue)}</p>
         </div>
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="text-sm font-medium text-gray-500">Accounts</h3>
-          <p className="text-2xl font-bold text-gray-700">{accounts.length}</p>
+        <div className="card">
+          <h3 className="text-sm font-medium" style={{ color: 'var(--color-muted)' }}>Accounts</h3>
+          <p className="text-2xl font-bold">{accounts.length}</p>
         </div>
       </div>
 
       {/* PRIORITY ORDER: Payments first */}
-      <Card title="Payments" right={<span className="text-sm text-gray-500">{payments.length} total</span>}>
+      <Card 
+        title="Payments" 
+        right={<span className="text-sm" style={{ color: 'var(--color-muted)' }}>{payments.length} total</span>}
+        collapsible={true}
+        collapsed={collapsedSections.payments}
+        onToggle={() => toggleSection('payments')}
+      >
         <ul className="divide-y mb-4 max-h-56 overflow-y-auto">
           {payments.map(p => (
             <li key={p.id} className="py-2 text-sm">
@@ -717,8 +780,8 @@ function App() {
                     />
                   </Labeled>
                   <div className="flex gap-2">
-                    <button type="button" className="px-3 py-2 bg-gray-200 rounded" onClick={cancelEditPayment}>Cancel</button>
-                    <button type="button" className="px-3 py-2 bg-blue-600 text-white rounded" onClick={() => saveEditPayment(p.id)}>Save</button>
+                    <button type="button" className="btn btn-secondary" onClick={cancelEditPayment}>Cancel</button>
+                    <button type="button" className="btn btn-primary" onClick={() => saveEditPayment(p.id)}>Save</button>
                   </div>
                 </div>
               ) : (
@@ -726,8 +789,8 @@ function App() {
                   <span>{accountLookup[p.checking_account_id]} → Payee Account {p.payee_account_id} • {p.date?.slice(0,10)}</span>
                   <div className="flex items-center gap-3">
                     <span className="font-medium">{formatMoney(p.amount)}</span>
-                    <button type="button" className="text-blue-600 hover:underline" onClick={() => startEditPayment(p)}>Edit</button>
-                    <button type="button" className="text-red-600 hover:underline" onClick={() => removePayment(p.id)}>Delete</button>
+                    <button type="button" className="btn-link btn-link-edit" onClick={() => startEditPayment(p)}>Edit</button>
+                    <button type="button" className="btn-link-danger" onClick={() => removePayment(p.id)}>Delete</button>
                   </div>
                 </div>
               )}
@@ -779,7 +842,7 @@ function App() {
         <button
           type="button"
           onClick={createPayment}
-          className="mt-2 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          className="btn btn-primary"
         >
           Add Payment
         </button>
@@ -789,7 +852,13 @@ function App() {
       {/* I'll continue with the remaining sections in the same pattern */}
 
       {/* Deposits second */}
-      <Card title="Deposits" right={<span className="text-sm text-gray-500">{deposits.length} total</span>}>
+      <Card 
+        title="Deposits" 
+        right={<span className="text-sm" style={{ color: 'var(--color-muted)' }}>{deposits.length} total</span>}
+        collapsible={true}
+        collapsed={collapsedSections.deposits}
+        onToggle={() => toggleSection('deposits')}
+      >
         <ul className="divide-y mb-4 max-h-56 overflow-y-auto">
           {deposits.map(d => (
             <li key={d.id} className="py-2 text-sm">
@@ -834,8 +903,8 @@ function App() {
                     />
                   </Labeled>
                   <div className="flex gap-2">
-                    <button type="button" className="px-3 py-2 bg-gray-200 rounded" onClick={cancelEditDeposit}>Cancel</button>
-                    <button type="button" className="px-3 py-2 bg-blue-600 text-white rounded" onClick={() => saveEditDeposit(d.id)}>Save</button>
+                    <button type="button" className="btn btn-secondary" onClick={cancelEditDeposit}>Cancel</button>
+                    <button type="button" className="btn btn-primary" onClick={() => saveEditDeposit(d.id)}>Save</button>
                   </div>
                 </div>
               ) : (
@@ -843,8 +912,8 @@ function App() {
                   <span>{d.source} → {accountLookup[d.account_id]} • {d.date?.slice(0,10)}</span>
                   <div className="flex items-center gap-3">
                     <span className="font-medium">{formatMoney(d.amount)}</span>
-                    <button type="button" className="text-blue-600 hover:underline" onClick={() => startEditDeposit(d)}>Edit</button>
-                    <button type="button" className="text-red-600 hover:underline" onClick={() => removeDeposit(d.id)}>Delete</button>
+                    <button type="button" className="btn-link btn-link-edit" onClick={() => startEditDeposit(d)}>Edit</button>
+                    <button type="button" className="btn-link-danger" onClick={() => removeDeposit(d.id)}>Delete</button>
                   </div>
                 </div>
               )}
@@ -895,7 +964,7 @@ function App() {
         <button
           type="button"
           onClick={createDeposit}
-          className="mt-2 px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          className="btn btn-primary"
         >
           Add Deposit
         </button>
@@ -905,7 +974,13 @@ function App() {
       {/* I'll include the rest of the components with the same validation pattern */}
 
       {/* Transfers third */}
-      <Card title="Transfers" right={<span className="text-sm text-gray-500">{transfers.length} total</span>}>
+      <Card 
+        title="Transfers" 
+        right={<span className="text-sm" style={{ color: 'var(--color-muted)' }}>{transfers.length} total</span>}
+        collapsible={true}
+        collapsed={collapsedSections.transfers}
+        onToggle={() => toggleSection('transfers')}
+      >
         <ul className="divide-y mb-4 max-h-56 overflow-y-auto">
           {transfers.map(t => (
             <li key={t.id} className="py-1 flex justify-between text-sm">
@@ -959,14 +1034,20 @@ function App() {
         <button
           type="button"
           onClick={createTransfer}
-          className="mt-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          className="btn btn-primary"
         >
           Add Transfer
         </button>
       </Card>
 
       {/* Accounts fourth */}
-      <Card title="Accounts" right={<span className="text-sm text-gray-500">{accounts.length} total</span>}>
+      <Card 
+        title="Accounts" 
+        right={<span className="text-sm" style={{ color: 'var(--color-muted)' }}>{accounts.length} total</span>}
+        collapsible={true}
+        collapsed={collapsedSections.accounts}
+        onToggle={() => toggleSection('accounts')}
+      >
         <ul className="divide-y mb-4 max-h-64 overflow-y-auto">
           {accounts.map(a => (
             <li key={a.id} className="py-2">
@@ -1001,22 +1082,22 @@ function App() {
                       step="0.01"
                     />
                   </Labeled>
-                  <div className="text-xs text-gray-500 self-center">ID {a.id}</div>
+                  <div className="text-xs" style={{ color: 'var(--color-muted)' }}>ID {a.id}</div>
                   <div className="flex gap-2">
-                    <button type="button" className="px-3 py-2 bg-gray-200 rounded" onClick={cancelEditAccount}>Cancel</button>
-                    <button type="button" className="px-3 py-2 bg-blue-600 text-white rounded" onClick={() => saveEditAccount(a.id)}>Save</button>
+                    <button type="button" className="btn btn-secondary" onClick={cancelEditAccount}>Cancel</button>
+                    <button type="button" className="btn btn-primary" onClick={() => saveEditAccount(a.id)}>Save</button>
                   </div>
                 </div>
               ) : (
                 <div className="flex justify-between items-center">
                   <div>
-                    <div className="font-medium">{a.nickname} <span className="text-xs text-gray-400">({a.type})</span></div>
-                    <div className="text-xs text-gray-500">ID {a.id}</div>
+                    <div className="font-medium">{a.nickname} <span className="text-xs" style={{ color: 'var(--color-muted)' }}>({a.type})</span></div>
+                    <div className="text-xs" style={{ color: 'var(--color-muted)' }}>ID {a.id}</div>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="font-semibold">{formatMoney(a.balance)}</div>
-                    <button type="button" className="text-blue-600 hover:underline" onClick={() => startEditAccount(a)}>Edit</button>
-                    <button type="button" className="text-red-600 hover:underline" onClick={() => removeAccount(a.id)}>Delete</button>
+                    <button type="button" className="btn-link btn-link-edit" onClick={() => startEditAccount(a)}>Edit</button>
+                    <button type="button" className="btn-link-danger" onClick={() => removeAccount(a.id)}>Delete</button>
                   </div>
                 </div>
               )}
@@ -1059,14 +1140,20 @@ function App() {
         <button
           type="button"
           onClick={createAccount}
-          className="mt-2 px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+          className="btn btn-primary"
         >
           Add Account
         </button>
       </Card>
 
       {/* Payees */}
-      <Card title="Payees" right={<span className="text-sm text-gray-500">{payees.length} total</span>}>
+      <Card 
+        title="Payees" 
+        right={<span className="text-sm" style={{ color: 'var(--color-muted)' }}>{payees.length} total</span>}
+        collapsible={true}
+        collapsed={collapsedSections.payees}
+        onToggle={() => toggleSection('payees')}
+      >
         <ul className="divide-y mb-4 max-h-64 overflow-y-auto">
           {payees.map(p => (
             <li key={p.id} className="py-2">
@@ -1080,21 +1167,21 @@ function App() {
                       required
                     />
                   </Labeled>
-                  <div className="text-xs text-gray-500 self-center">ID {p.id}</div>
+                  <div className="text-xs" style={{ color: 'var(--color-muted)' }}>ID {p.id}</div>
                   <div className="flex gap-2">
-                    <button type="button" className="px-3 py-2 bg-gray-200 rounded" onClick={cancelEditPayee}>Cancel</button>
-                    <button type="button" className="px-3 py-2 bg-blue-600 text-white rounded" onClick={() => saveEditPayee(p.id)}>Save</button>
+                    <button type="button" className="btn btn-secondary" onClick={cancelEditPayee}>Cancel</button>
+                    <button type="button" className="btn btn-primary" onClick={() => saveEditPayee(p.id)}>Save</button>
                   </div>
                 </div>
               ) : (
                 <div className="flex justify-between items-center">
                   <div>
                     <div className="font-medium">{p.name}</div>
-                    <div className="text-xs text-gray-500">ID {p.id}</div>
+                    <div className="text-xs" style={{ color: 'var(--color-muted)' }}>ID {p.id}</div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <button type="button" className="text-blue-600 hover:underline" onClick={() => startEditPayee(p)}>Edit</button>
-                    <button type="button" className="text-red-600 hover:underline" onClick={() => removePayee(p.id)}>Delete</button>
+                    <button type="button" className="btn-link btn-link-edit" onClick={() => startEditPayee(p)}>Edit</button>
+                    <button type="button" className="btn-link-danger" onClick={() => removePayee(p.id)}>Delete</button>
                   </div>
                 </div>
               )}
@@ -1115,14 +1202,20 @@ function App() {
         <button
           type="button"
           onClick={createPayee}
-          className="mt-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+          className="btn btn-primary"
         >
           Add Payee
         </button>
       </Card>
 
       {/* Payee Accounts */}
-      <Card title="Payee Accounts" right={<span className="text-sm text-gray-500">{payeeAccounts.length} total</span>}>
+      <Card 
+        title="Payee Accounts" 
+        right={<span className="text-sm" style={{ color: 'var(--color-muted)' }}>{payeeAccounts.length} total</span>}
+        collapsible={true}
+        collapsed={collapsedSections.payeeAccounts}
+        onToggle={() => toggleSection('payeeAccounts')}
+      >
         <ul className="divide-y mb-4 max-h-72 overflow-y-auto">
           {payeeAccountsEnriched.map(pa => (
             <li key={pa.id} className="py-2">
@@ -1178,8 +1271,8 @@ function App() {
                     </select>
                   </Labeled>
                   <div className="flex gap-2">
-                    <button type="button" className="px-3 py-2 bg-gray-200 rounded" onClick={cancelEditPayeeAccount}>Cancel</button>
-                    <button type="button" className="px-3 py-2 bg-blue-600 text-white rounded" onClick={() => saveEditPayeeAccount(pa.id)}>Save</button>
+                    <button type="button" className="btn btn-secondary" onClick={cancelEditPayeeAccount}>Cancel</button>
+                    <button type="button" className="btn btn-primary" onClick={() => saveEditPayeeAccount(pa.id)}>Save</button>
                   </div>
 
                   <Labeled label="Interest Rate (%)">
@@ -1252,15 +1345,15 @@ function App() {
                 <div className="flex justify-between items-center">
                   <div>
                     <div className="font-medium">{pa.payee_name} - {pa.account_label}</div>
-                    <div className="text-xs text-gray-500">{pa.category} | {pa.interest_type} | Due {pa.due_date}</div>
+                    <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{pa.category} | {pa.interest_type} | Due {pa.due_date}</div>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
                       <div className="font-semibold">{formatMoney(pa.current_balance)}</div>
-                      <div className="text-xs text-gray-500">ID {pa.id}</div>
+                      <div className="text-xs" style={{ color: 'var(--color-muted)' }}>ID {pa.id}</div>
                     </div>
-                    <button type="button" className="text-blue-600 hover:underline" onClick={() => startEditPayeeAccount(pa)}>Edit</button>
-                    <button type="button" className="text-red-600 hover:underline" onClick={() => removePayeeAccount(pa.id)}>Delete</button>
+                    <button type="button" className="btn-link btn-link-edit" onClick={() => startEditPayeeAccount(pa)}>Edit</button>
+                    <button type="button" className="btn-link-danger" onClick={() => removePayeeAccount(pa.id)}>Delete</button>
                   </div>
                 </div>
               )}
@@ -1306,7 +1399,7 @@ function App() {
         <button
           type="button"
           onClick={createPayeeAccount}
-          className="mt-2 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          className="btn btn-primary"
         >
           Add Payee Account
         </button>
@@ -1321,7 +1414,7 @@ function App() {
             onChange={() => setShowDepositsChart(!showDepositsChart)}
             className="mr-2"
           />
-        <span>Show Deposits by Source</span>
+        <span className="toggle-label">Show Deposits by Source</span>
         </label>
         <label className="flex items-center">
           <input
@@ -1330,7 +1423,7 @@ function App() {
             onChange={() => setShowCashflowChart(!showCashflowChart)}
             className="mr-2"
           />
-          <span>Show Monthly Cashflow</span>
+          <span className="toggle-label">Show Monthly Cashflow</span>
         </label>
       </div>
 

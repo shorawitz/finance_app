@@ -1,0 +1,97 @@
+/* =================== */
+/* Base button styling */
+/* =================== */
+.btn {
+  padding: 0.5rem 0.9rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.1s ease;
+}
+
+.btn:focus {
+  outline: 2px solid var(--color-edit);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* =================== */
+/* Primary (green)     */
+/* =================== */
+.btn-primary {
+  background-color: var(--color-primary);
+  color: white;
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--color-primary-hover);
+}
+.btn-primary:active {
+  transform: scale(0.97);
+}
+
+/* =================== */
+/* Secondary (gray)    */
+/* =================== */
+.btn-secondary {
+  background-color: var(--color-secondary);
+  color: var(--color-secondary-text);
+}
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--color-secondary-hover);
+}
+.btn-secondary:active {
+  transform: scale(0.97);
+}
+
+/* =================== */
+/* Danger (red)        */
+/* =================== */
+.btn-danger {
+  background-color: var(--color-danger);
+  color: white;
+}
+.btn-danger:hover:not(:disabled) {
+  background-color: var(--color-danger-hover);
+}
+.btn-danger:active {
+  transform: scale(0.97);
+}
+
+/* =================== */
+/* Link-style buttons  */
+/* =================== */
+.btn-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0;
+}
+
+.btn-link-edit {
+  color: var(--color-edit);
+}
+.btn-link-edit:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.btn-link-danger {
+  color: var(--color-danger);
+}
+.btn-link-danger:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+/* Theme toggle button */
+.theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+}
