@@ -50,16 +50,22 @@ class PayeeAccount(Base):
     __tablename__ = "payee_accounts"
     id = Column(Integer, primary_key=True)
     payee_id = Column(Integer, ForeignKey("payees.id"), nullable=False)
-    account_label = Column(String, nullable=False)  # e.g., "Visa #1234"
-    account_number = Column(String, nullable=True)  # NEW: actual account/loan/card number
-    category = Column(String, nullable=False)  # credit card, mortgage, loan, utilities, etc.
-    interest_type = Column(String, default="none") # 'none', 'pif', 'compound', 'loan'
-    interest_rate = Column(Float, default=0.0) 
+    account_label = Column(String, nullable=False)
+    account_number = Column(String, nullable=True)
+    category = Column(String, nullable=False)          # credit card, loan, mortgage, etc
+    interest_type = Column(String, default="none")     # 'none', 'pif', 'compound', 'loan'
+    interest_rate = Column(Float, default=0.0)
     current_balance = Column(Float, default=0.0)
     principal_balance = Column(Float, default=0.0)
     accrued_interest = Column(Float, default=0.0)
     due_date = Column(Date, nullable=True)
     last_interest_calc = Column(Date, nullable=True)
+
+    # 🔹 NEW FIELDS
+    loan_term_months = Column(Integer, nullable=True)        # e.g. 36 months
+    promo_term_months = Column(Integer, nullable=True)       # credit card promo term
+    require_min_payment = Column(Integer, default=0)         # 0=false, 1=true
+    min_payment_amount = Column(Float, nullable=True)
 
     payee = relationship("Payee", back_populates="accounts")
     payments = relationship("Payment", back_populates="payee_account")

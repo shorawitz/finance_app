@@ -63,6 +63,40 @@ class PayeeAccountBase(BaseModel):
     accrued_interest: Decimal = Decimal("0")
     due_date: Optional[date] = None
 
+    # 🔹 NEW FIELDS
+    loan_term_months: Optional[int] = None
+    promo_term_months: Optional[int] = None
+    require_min_payment: bool = False
+    min_payment_amount: Optional[Decimal] = None
+
+
+class PayeeAccountCreate(PayeeAccountBase):
+    pass
+
+
+class PayeeAccountUpdate(BaseModel):
+    payee_id: Optional[int] = None
+    account_label: Optional[str] = None
+    account_number: Optional[str] = None
+    category: Optional[str] = None
+    interest_type: Optional[Literal["none", "pif", "compound", "loan"]] = None
+    interest_rate: Optional[float] = None
+    current_balance: Optional[Decimal] = None
+    principal_balance: Optional[Decimal] = None
+    accrued_interest: Optional[Decimal] = None
+    due_date: Optional[date] = None
+
+    # 🔹 NEW FIELDS
+    loan_term_months: Optional[int] = None
+    promo_term_months: Optional[int] = None
+    require_min_payment: Optional[bool] = None
+    min_payment_amount: Optional[Decimal] = None
+
+
+class PayeeAccountRead(PayeeAccountBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
 
 class PayeeAccountCreate(PayeeAccountBase):
     pass

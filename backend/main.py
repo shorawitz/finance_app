@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import api_router
+from routers import payee_logic
 
 app = FastAPI(title="Finance Tracker API")
 
@@ -21,6 +22,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+app.include_router(payee_logic.router)
 
 @app.get("/")
 def read_root():

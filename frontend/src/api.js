@@ -75,7 +75,6 @@ export async function getTransfers() {
 export async function createTransfer(payload) {
   return fetchJSON('/transfers', { method: 'POST', body: payload });
 }
-// (No update/delete for transfers in the UI right now)
 
 // -------- Payees --------
 export async function getPayees() {
@@ -113,7 +112,16 @@ export async function getCashflowMonthly() {
   return fetchJSON('/reports/cashflow-monthly');
 }
 
-// Optional grouped export if you were importing { api } somewhere
+// -------- New Payee Logic --------
+export async function getRecommendedPayment(payeeAccountId) {
+  return fetchJSON(`/payee-accounts/${payeeAccountId}/recommended-payment`);
+}
+
+export async function getAmortizationSchedule(payeeAccountId) {
+  return fetchJSON(`/payee-accounts/${payeeAccountId}/amortization`);
+}
+
+// Optional grouped export
 export const api = {
   getAccounts,
   createAccount,
@@ -145,6 +153,9 @@ export const api = {
 
   getDepositsBySource,
   getCashflowMonthly,
+
+  getRecommendedPayment,
+  getAmortizationSchedule,
 };
 
 export default api;

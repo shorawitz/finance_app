@@ -31,6 +31,64 @@ import './styles/theme.css';
 import './styles/buttons.css';
 import './styles/forms.css';
 
+// RecommendedPaymentCell — robust parsing + helpful diagnostics
+function RecommendedPaymentCell({ payeeAccountId }) {
+  const [recommendedPayment, setRecommendedPayment] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function fetchRecommendedPayment() {
+      try {
+        setLoading(true);
+        setError(null);
+        setRecommendedPayment(null);
+
+        const url = `${process.env.REACT_APP_API_URL}/api/payee-accounts/${payeeAccountId}/recommended_payment`;
+        const res = await fetch(url, { credentials: 'same-origin' });
+
+        // capture response body text first (so we can inspect HTML vs JSON)
+        const bodyText = await res.text();
+
+        if (!res.ok) {
+          const msg = `Status ${res.status}: ${bodyText.substring(0, 300)}`;
+          throw new Error(msg);
+        }
+
+        // Try to parse JSON — handle HTML fallback gracefully
+        let data = null;
+        try {
+          data = JSON.parse(bodyText);
+        } catch (parseErr) {
+          // body was not JSON (likely HTML)
+          const msg = `Expected JSON but got non-JSON response (first 300 chars): ${bodyText.substring(0, 300)}`;
+          throw new Error(msg);
+        }
+
+        if (!cancelled) {
+          const val = data.recommended_payment ?? data.recommendedPayment ?? data.value ?? null;
+          setRecommendedPayment(typeof val === 'number' ? val : null);
+        }
+      } catch (err) {
+        console.error('RecommendedPaymentCell fetch error for', payeeAccountId, err);
+        if (!cancelled) setError(err.message || String(err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    if (payeeAccountId) fetchRecommendedPayment();
+    return () => { cancelled = true; };
+  }, [payeeAccountId]);
+
+  if (loading) return <span>Loading…</span>;
+  if (error) return <span title={error} style={{ color: '#d9534f', fontWeight: 600 }}>Error</span>;
+  if (recommendedPayment === null) return <span>—</span>;
+  return <span>{formatMoney(recommendedPayment)}</span>;
+}
+
 // Simple helpers
 const Card = ({ title, right, children, collapsible = false, collapsed = false, onToggle }) => (
   <div className="card">
@@ -99,7 +157,11 @@ function App() {
     current_balance: 0,
     principal_balance: 0,
     accrued_interest: 0,
-    due_date: new Date().toISOString().slice(0, 10)
+    due_date: new Date().toISOString().slice(0, 10),
+    loan_term_months: null,
+    promo_term_months: null,
+    require_min_payment: false,
+    min_payment_amount: null,
   });
   const [paymentForm, setPaymentForm] = useState({ checking_account_id: null, payee_account_id: null, amount: '', date: new Date().toISOString().slice(0, 10) });
 
@@ -127,7 +189,11 @@ function App() {
     current_balance: 0,
     principal_balance: 0,
     accrued_interest: 0,
-    due_date: new Date().toISOString().slice(0, 10)
+    due_date: new Date().toISOString().slice(0, 10),
+    loan_term_months: null,
+    promo_term_months: null,
+    require_min_payment: false,
+    min_payment_amount: null,
   });
 
   // Chart data state
@@ -326,7 +392,7 @@ function App() {
   }
 
   async function createPayeeAccount() {
-    // Validation
+    // Base validation
     if (!payeeAccountForm.payee_id) {
       alert('Please select a payee.');
       return;
@@ -344,6 +410,31 @@ function App() {
       return;
     }
 
+    // Additional validation for new fields
+    const itype = payeeAccountForm.interest_type;
+    const rate = payeeAccountForm.interest_rate;
+    const principal = payeeAccountForm.principal_balance;
+    const minReq = payeeAccountForm.require_min_payment;
+    const minAmt = payeeAccountForm.min_payment_amount;
+
+    // If interest type is loan or compound, interest rate should be a number >= 0
+    if ((itype === 'loan' || itype === 'compound') && (rate === '' || rate === null || isNaN(Number(rate)) || Number(rate) < 0)) {
+      alert('Interest rate must be a non-negative number for loan/compound interest types.');
+      return;
+    }
+
+    // If interest type is loan, principal is expected
+    if (itype === 'loan' && (principal === '' || principal === null || isNaN(Number(principal)) || Number(principal) < 0)) {
+      alert('Principal balance must be provided and non-negative for loan interest type.');
+      return;
+    }
+
+    // If min payment is required, a positive min payment amount is needed
+    if (minReq && (minAmt === '' || minAmt === null || isNaN(Number(minAmt)) || Number(minAmt) <= 0)) {
+      alert('Minimum payment amount must be greater than 0 when "Require minimum payment" is checked.');
+      return;
+    }
+
     try {
       const payload = {
         ...payeeAccountForm,
@@ -351,6 +442,10 @@ function App() {
         current_balance: payeeAccountForm.current_balance === '' ? null : parseFloat(payeeAccountForm.current_balance),
         principal_balance: payeeAccountForm.principal_balance === '' ? null : parseFloat(payeeAccountForm.principal_balance),
         accrued_interest: payeeAccountForm.accrued_interest === '' ? null : parseFloat(payeeAccountForm.accrued_interest),
+        loan_term_months: payeeAccountForm.loan_term_months === '' ? null : parseInt(payeeAccountForm.loan_term_months),
+        promo_term_months: payeeAccountForm.promo_term_months === '' ? null : parseInt(payeeAccountForm.promo_term_months),
+        require_min_payment: Boolean(payeeAccountForm.require_min_payment),
+        min_payment_amount: payeeAccountForm.min_payment_amount === '' ? null : parseFloat(payeeAccountForm.min_payment_amount),
         user_id: 1
       };
       await apiCreatePayeeAccount(payload);
@@ -365,7 +460,11 @@ function App() {
         current_balance: 0,
         principal_balance: 0,
         accrued_interest: 0,
-        due_date: new Date().toISOString().slice(0, 10)
+        due_date: new Date().toISOString().slice(0, 10),
+        loan_term_months: null,
+        promo_term_months: null,
+        require_min_payment: false,
+        min_payment_amount: null,
       });
     } catch (error) {
       alert(`Failed to create payee account: ${error.message}`);
@@ -620,7 +719,11 @@ function App() {
       current_balance: pa.current_balance ?? null,
       principal_balance: pa.principal_balance ?? null,
       accrued_interest: pa.accrued_interest ?? null,
-      due_date: pa.due_date?.slice(0, 10) || new Date().toISOString().slice(0, 10)
+      due_date: pa.due_date?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+      loan_term_months: pa.loan_term_months ?? null,
+      promo_term_months: pa.promo_term_months ?? null,
+      require_min_payment: pa.require_min_payment ?? false,
+      min_payment_amount: pa.min_payment_amount ?? null,
     });
   }
   function cancelEditPayeeAccount() {
@@ -638,8 +741,9 @@ function App() {
       due_date: new Date().toISOString().slice(0, 10)
     });
   }
+  
   async function saveEditPayeeAccount(id) {
-    // Validation
+    // Base validation
     if (!payeeAccountEdits.payee_id) {
       alert('Please select a payee.');
       return;
@@ -657,6 +761,26 @@ function App() {
       return;
     }
 
+    // Additional validation
+    const itype = payeeAccountEdits.interest_type;
+    const rate = payeeAccountEdits.interest_rate;
+    const principal = payeeAccountEdits.principal_balance;
+    const minReq = payeeAccountEdits.require_min_payment;
+    const minAmt = payeeAccountEdits.min_payment_amount;
+
+    if ((itype === 'loan' || itype === 'compound') && (rate === '' || rate === null || isNaN(Number(rate)) || Number(rate) < 0)) {
+      alert('Interest rate must be a non-negative number for loan/compound interest types.');
+      return;
+    }
+    if (itype === 'loan' && (principal === '' || principal === null || isNaN(Number(principal)) || Number(principal) < 0)) {
+      alert('Principal balance must be provided and non-negative for loan interest type.');
+      return;
+    }
+    if (minReq && (minAmt === '' || minAmt === null || isNaN(Number(minAmt)) || Number(minAmt) <= 0)) {
+      alert('Minimum payment amount must be greater than 0 when "Require minimum payment" is checked.');
+      return;
+    }
+
     try {
       const payload = {
         ...payeeAccountEdits,
@@ -665,6 +789,10 @@ function App() {
         current_balance: payeeAccountEdits.current_balance === null || payeeAccountEdits.current_balance === '' ? null : parseFloat(payeeAccountEdits.current_balance),
         principal_balance: payeeAccountEdits.principal_balance === null || payeeAccountEdits.principal_balance === '' ? null : parseFloat(payeeAccountEdits.principal_balance),
         accrued_interest: payeeAccountEdits.accrued_interest === null || payeeAccountEdits.accrued_interest === '' ? null : parseFloat(payeeAccountEdits.accrued_interest),
+        loan_term_months: payeeAccountEdits.loan_term_months === null || payeeAccountEdits.loan_term_months === '' ? null : parseInt(payeeAccountEdits.loan_term_months),
+        promo_term_months: payeeAccountEdits.promo_term_months === null || payeeAccountEdits.promo_term_months === '' ? null : parseInt(payeeAccountEdits.promo_term_months),
+        require_min_payment: Boolean(payeeAccountEdits.require_min_payment),
+        min_payment_amount: payeeAccountEdits.min_payment_amount === null || payeeAccountEdits.min_payment_amount === '' ? null : parseFloat(payeeAccountEdits.min_payment_amount),
       };
       await updatePayeeAccount(id, payload);
       setPayeeAccounts(await getPayeeAccounts());
@@ -673,6 +801,7 @@ function App() {
       alert(`Failed to update payee account: ${error.message}`);
     }
   }
+
   async function removePayeeAccount(id) {
     if (!window.confirm('Delete this payee account?')) return;
     try {
@@ -1216,153 +1345,221 @@ function App() {
         collapsed={collapsedSections.payeeAccounts}
         onToggle={() => toggleSection('payeeAccounts')}
       >
-        <ul className="divide-y mb-4 max-h-72 overflow-y-auto">
-          {payeeAccountsEnriched.map(pa => (
-            <li key={pa.id} className="py-2">
-              {editingPayeeAccountId === pa.id ? (
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
-                  <Labeled label="Payee">
-                    <select
-                      value={payeeAccountEdits.payee_id || ''}
-                      onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, payee_id: Number(e.target.value) })}
-                      className="w-full border rounded p-2"
-                      required
-                    >
-                      {payees.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                  </Labeled>
-                  <Labeled label="Account Label">
-                    <input
-                      className="w-full border rounded p-2"
-                      value={payeeAccountEdits.account_label}
-                      onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, account_label: e.target.value })}
-                      required
-                    />
-                  </Labeled>
-                  <Labeled label="Category">
-                    <select
-                      value={payeeAccountEdits.category}
-                      onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, category: e.target.value })}
-                      className="w-full border rounded p-2"
-                      required
-                    >
-                      <option value="credit card">Credit Card</option>
-                      <option value="loan">Loan</option>
-                      <option value="mortgage">Mortgage</option>
-                      <option value="utility">Utility</option>
-                    </select>
-                  </Labeled>
-                  <Labeled label="Interest Type">
-                    <select
-                      value={payeeAccountEdits.interest_type}
-                      onChange={e =>
-                        setPayeeAccountEdits({
-                          ...payeeAccountEdits,
-                          interest_type: e.target.value
-                        })
-                      }
-                      className="w-full border rounded p-2"
-                      required
-                    >
-                      <option value="none">None</option>
-                      <option value="pif">Pay In Full (pif)</option>
-                      <option value="compound">Compound</option>
-                      <option value="loan">Loan</option>
-                    </select>
-                  </Labeled>
-                  <div className="flex gap-2">
-                    <button type="button" className="btn btn-secondary" onClick={cancelEditPayeeAccount}>Cancel</button>
-                    <button type="button" className="btn btn-primary" onClick={() => saveEditPayeeAccount(pa.id)}>Save</button>
-                  </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className="text-left p-2">Payee</th>
+              <th className="text-left p-2">Account Label</th>
+              <th className="text-left p-2">Category</th>
+              <th className="text-left p-2">Interest Type</th>
+              <th className="text-right p-2">Interest Rate (%)</th>
+              <th className="text-right p-2">Current Balance</th>
+              <th className="text-right p-2">Principal Balance</th>
+              <th className="text-right p-2">Accrued Interest</th>
+              <th className="text-left p-2">Due Date</th>
+              <th className="text-right p-2">Recommended Payment</th>
+              <th className="text-center p-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {payeeAccountsEnriched.map(pa => (
+              <tr key={pa.id} className="border-t">
+                {editingPayeeAccountId === pa.id ? (
+                  <td colSpan={11} className="p-2">
+                    <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-2 items-end">
+                      <Labeled label="Payee">
+                        <select
+                          value={payeeAccountEdits.payee_id || ''}
+                          onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, payee_id: Number(e.target.value) })}
+                          className="w-full border rounded p-2"
+                          required
+                        >
+                          {payees.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      </Labeled>
 
-                  <Labeled label="Interest Rate (%)">
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="w-full border rounded p-2"
-                      value={payeeAccountEdits.interest_rate ?? ""}
-                      onChange={e =>
-                        setPayeeAccountEdits({
-                          ...payeeAccountEdits,
-                          interest_rate: e.target.value === "" ? null : parseFloat(e.target.value)
-                        })
-                      }
-                    />
-                  </Labeled>
-                  <Labeled label="Current Balance">
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="w-full border rounded p-2"
-                      value={payeeAccountEdits.current_balance ?? ""}
-                      onChange={e =>
-                        setPayeeAccountEdits({
-                          ...payeeAccountEdits,
-                          current_balance: e.target.value === "" ? null : parseFloat(e.target.value)
-                        })
-                      }
-                    />
-                  </Labeled>
-                  <Labeled label="Principal Balance">
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="w-full border rounded p-2"
-                      value={payeeAccountEdits.principal_balance ?? ""}
-                      onChange={e =>
-                        setPayeeAccountEdits({
-                          ...payeeAccountEdits,
-                          principal_balance: e.target.value === "" ? null : parseFloat(e.target.value)
-                        })
-                      }
-                    />
-                  </Labeled>
-                  <Labeled label="Accrued Interest">
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="w-full border rounded p-2"
-                      value={payeeAccountEdits.accrued_interest ?? ""}
-                      onChange={e =>
-                        setPayeeAccountEdits({
-                          ...payeeAccountEdits,
-                          accrued_interest: e.target.value === "" ? null : parseFloat(e.target.value)
-                        })
-                      }
-                    />
-                  </Labeled>
-                  <Labeled label="Due Date">
-                    <input
-                      type="date"
-                      className="w-full border rounded p-2"
-                      value={payeeAccountEdits.due_date ?? ""}
-                      onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, due_date: e.target.value })}
-                      required
-                    />
-                  </Labeled>
-                </div>
-              ) : (
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="font-medium">{pa.payee_name} - {pa.account_label}</div>
-                    <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{pa.category} | {pa.interest_type} | Due {pa.due_date}</div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <div className="font-semibold">{formatMoney(pa.current_balance)}</div>
-                      <div className="text-xs" style={{ color: 'var(--color-muted)' }}>ID {pa.id}</div>
+                      <Labeled label="Account Label">
+                        <input
+                          className="w-full border rounded p-2"
+                          value={payeeAccountEdits.account_label}
+                          onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, account_label: e.target.value })}
+                          required
+                        />
+                      </Labeled>
+
+                      <Labeled label="Category">
+                        <select
+                          value={payeeAccountEdits.category}
+                          onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, category: e.target.value })}
+                          className="w-full border rounded p-2"
+                          required
+                        >
+                          <option value="credit card">Credit Card</option>
+                          <option value="loan">Loan</option>
+                          <option value="mortgage">Mortgage</option>
+                          <option value="utility">Utility</option>
+                        </select>
+                      </Labeled>
+
+                      <Labeled label="Interest Type">
+                        <select
+                          value={payeeAccountEdits.interest_type}
+                          onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, interest_type: e.target.value })}
+                          className="w-full border rounded p-2"
+                          required
+                        >
+                          <option value="none">None</option>
+                          <option value="pif">Pay In Full (pif)</option>
+                          <option value="compound">Compound</option>
+                          <option value="loan">Loan</option>
+                        </select>
+                      </Labeled>
+
+                      <Labeled label="Interest Rate (%)">
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-full border rounded p-2"
+                          value={payeeAccountEdits.interest_rate ?? ""}
+                          onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, interest_rate: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                        />
+                      </Labeled>
+
+                      <Labeled label="Current Balance">
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-full border rounded p-2"
+                          value={payeeAccountEdits.current_balance ?? ""}
+                          onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, current_balance: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                        />
+                      </Labeled>
+
+                      <Labeled label="Principal Balance">
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-full border rounded p-2"
+                          value={payeeAccountEdits.principal_balance ?? ""}
+                          onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, principal_balance: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                        />
+                      </Labeled>
+
+                      <Labeled label="Accrued Interest">
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-full border rounded p-2"
+                          value={payeeAccountEdits.accrued_interest ?? ""}
+                          onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, accrued_interest: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                        />
+                      </Labeled>
+
+                      <Labeled label="Due Date">
+                        <input
+                          type="date"
+                          className="w-full border rounded p-2"
+                          value={payeeAccountEdits.due_date ?? ""}
+                          onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, due_date: e.target.value })}
+                          required
+                        />
+                      </Labeled>
+
+                      <Labeled label="Loan Term (months)">
+                        <input
+                          type="number"
+                          className="w-full border rounded p-2"
+                          value={payeeAccountEdits.loan_term_months ?? ""}
+                          onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, loan_term_months: e.target.value === "" ? null : parseInt(e.target.value) })}
+                          min="0"
+                        />
+                      </Labeled>
+
+                      <Labeled label="Promo Term (months)">
+                        <input
+                          type="number"
+                          className="w-full border rounded p-2"
+                          value={payeeAccountEdits.promo_term_months ?? ""}
+                          onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, promo_term_months: e.target.value === "" ? null : parseInt(e.target.value) })}
+                          min="0"
+                        />
+                      </Labeled>
+
+                      <Labeled label="Require Minimum Payment">
+                        <div className="flex items-center h-full">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(payeeAccountEdits.require_min_payment)}
+                            onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, require_min_payment: e.target.checked })}
+                            className="w-4 h-4"
+                          />
+                        </div>
+                      </Labeled>
+
+                      <Labeled label="Min Payment Amount">
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-full border rounded p-2"
+                          value={payeeAccountEdits.min_payment_amount ?? ""}
+                          onChange={e => setPayeeAccountEdits({ ...payeeAccountEdits, min_payment_amount: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                          disabled={!payeeAccountEdits.require_min_payment}
+                          min="0.01"
+                        />
+                      </Labeled>
+
+                      <div className="flex gap-2 col-span-1">
+                        <button type="button" className="btn btn-secondary" onClick={cancelEditPayeeAccount}>Cancel</button>
+                        <button type="button" className="btn btn-primary" onClick={() => saveEditPayeeAccount(pa.id)}>Save</button>
+                      </div>
                     </div>
-                    <button type="button" className="btn-link btn-link-edit" onClick={() => startEditPayeeAccount(pa)}>Edit</button>
-                    <button type="button" className="btn-link-danger" onClick={() => removePayeeAccount(pa.id)}>Delete</button>
-                  </div>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+                  </td>
+                ) : (
+                  <>
+                    <td className="p-2">{pa.payee_name}</td>
+                    <td className="p-2">{pa.account_label}</td>
+                    <td className="p-2">{pa.category}</td>
+                    <td className="p-2">{pa.interest_type}</td>
+                    <td className="p-2 text-right">{pa.interest_rate?.toFixed(2) ?? '—'}</td>
+                    <td className="p-2 text-right">{formatMoney(pa.current_balance)}</td>
+                    <td className="p-2 text-right">{formatMoney(pa.principal_balance)}</td>
+                    <td className="p-2 text-right">{formatMoney(pa.accrued_interest)}</td>
+                    <td className="p-2">{pa.due_date}</td>
+                    <td className="p-2 text-right">
+                      <RecommendedPaymentCell payeeAccountId={pa.id} />
+                    </td>
+                    <td className="p-2 text-center">
+                      <div className="flex items-center justify-center" style={{ gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => startEditPayeeAccount(pa)}
+                          className="btn btn-secondary"
+                          style={{ padding: '6px 10px', borderRadius: 6 }}
+                          aria-label={`Edit ${pa.account_label}`}
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => removePayeeAccount(pa.id)}
+                          className="btn btn-danger"
+                          style={{ padding: '6px 10px', borderRadius: 6 }}
+                          aria-label={`Delete ${pa.account_label}`}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
         {/* Ensure the "Add Payee Account" button and form exist */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-2">
           <Labeled label="Payee">
             <select
               value={payeeAccountForm.payee_id || ''}
@@ -1373,6 +1570,7 @@ function App() {
               {payees.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </Labeled>
+
           <Labeled label="Account Label">
             <input
               className="w-full border rounded p-2"
@@ -1382,6 +1580,7 @@ function App() {
               required
             />
           </Labeled>
+
           <Labeled label="Category">
             <select
               value={payeeAccountForm.category}
@@ -1395,11 +1594,119 @@ function App() {
               <option value="utility">Utility</option>
             </select>
           </Labeled>
+
+          <Labeled label="Interest Type">
+            <select
+              value={payeeAccountForm.interest_type}
+              onChange={e => setPayeeAccountForm({ ...payeeAccountForm, interest_type: e.target.value })}
+              className="w-full border rounded p-2"
+              required
+            >
+              <option value="none">None</option>
+              <option value="pif">Pay In Full (pif)</option>
+              <option value="compound">Compound</option>
+              <option value="loan">Loan</option>
+            </select>
+          </Labeled>
+
+          <Labeled label="Interest Rate (%)">
+            <input
+              type="number"
+              step="0.01"
+              className="w-full border rounded p-2"
+              value={payeeAccountForm.interest_rate ?? ""}
+              onChange={e => setPayeeAccountForm({ ...payeeAccountForm, interest_rate: e.target.value === "" ? null : parseFloat(e.target.value) })}
+            />
+          </Labeled>
+
+          <Labeled label="Current Balance">
+            <input
+              type="number"
+              step="0.01"
+              className="w-full border rounded p-2"
+              value={payeeAccountForm.current_balance ?? ""}
+              onChange={e => setPayeeAccountForm({ ...payeeAccountForm, current_balance: e.target.value === "" ? null : parseFloat(e.target.value) })}
+            />
+          </Labeled>
+
+          <Labeled label="Principal Balance">
+            <input
+              type="number"
+              step="0.01"
+              className="w-full border rounded p-2"
+              value={payeeAccountForm.principal_balance ?? ""}
+              onChange={e => setPayeeAccountForm({ ...payeeAccountForm, principal_balance: e.target.value === "" ? null : parseFloat(e.target.value) })}
+            />
+          </Labeled>
+
+          <Labeled label="Accrued Interest">
+            <input
+              type="number"
+              step="0.01"
+              className="w-full border rounded p-2"
+              value={payeeAccountForm.accrued_interest ?? ""}
+              onChange={e => setPayeeAccountForm({ ...payeeAccountForm, accrued_interest: e.target.value === "" ? null : parseFloat(e.target.value) })}
+            />
+          </Labeled>
+
+          <Labeled label="Due Date">
+            <input
+              type="date"
+              className="w-full border rounded p-2"
+              value={payeeAccountForm.due_date ?? ""}
+              onChange={e => setPayeeAccountForm({ ...payeeAccountForm, due_date: e.target.value })}
+              required
+            />
+          </Labeled>
+
+          <Labeled label="Loan Term (months)">
+            <input
+              type="number"
+              className="w-full border rounded p-2"
+              value={payeeAccountForm.loan_term_months ?? ""}
+              onChange={e => setPayeeAccountForm({ ...payeeAccountForm, loan_term_months: e.target.value === "" ? null : parseInt(e.target.value) })}
+              min="0"
+            />
+          </Labeled>
+
+          <Labeled label="Promo Term (months)">
+            <input
+              type="number"
+              className="w-full border rounded p-2"
+              value={payeeAccountForm.promo_term_months ?? ""}
+              onChange={e => setPayeeAccountForm({ ...payeeAccountForm, promo_term_months: e.target.value === "" ? null : parseInt(e.target.value) })}
+              min="0"
+            />
+          </Labeled>
+
+          <Labeled label="Require Minimum Payment">
+            <div className="flex items-center h-full">
+              <input
+                type="checkbox"
+                checked={Boolean(payeeAccountForm.require_min_payment)}
+                onChange={e => setPayeeAccountForm({ ...payeeAccountForm, require_min_payment: e.target.checked })}
+                className="w-4 h-4"
+              />
+            </div>
+          </Labeled>
+
+          <Labeled label="Min Payment Amount">
+            <input
+              type="number"
+              step="0.01"
+              className="w-full border rounded p-2"
+              value={payeeAccountForm.min_payment_amount ?? ""}
+              onChange={e => setPayeeAccountForm({ ...payeeAccountForm, min_payment_amount: e.target.value === "" ? null : parseFloat(e.target.value) })}
+              disabled={!payeeAccountForm.require_min_payment}
+              min="0.01"
+            />
+          </Labeled>
         </div>
+
         <button
           type="button"
           onClick={createPayeeAccount}
-          className="btn btn-primary"
+          className="btn btn-primary mt-2"
         >
           Add Payee Account
         </button>
